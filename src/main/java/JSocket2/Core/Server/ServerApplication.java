@@ -44,11 +44,9 @@ public class ServerApplication {
                 new Thread(clientHandler).start();
             }
         } catch (IOException e) {
-            //Logger.get().error("Error while listening for clients");
             Close();
         }
         catch (Exception e) {
-            //Logger.get().error("Unknown Error while listening for clients");
             Close();
         }
     }

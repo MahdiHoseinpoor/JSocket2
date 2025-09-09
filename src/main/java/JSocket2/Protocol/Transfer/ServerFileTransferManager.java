@@ -21,11 +21,31 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Manages file transfers from the server's perspective.
+ * This class handles processing upload requests from clients, sending requested file chunks
+ * for downloads, and managing the state of transfers on the server.
+ */
 public class ServerFileTransferManager extends FileTransferManager {
     private final String SAVE_PATH = "src/files";
+
+    /**
+     * Constructs a ServerFileTransferManager.
+     *
+     * @param handler         The message handler for communication with a client.
+     * @param pendingRequests A map of pending requests for response correlation.
+     */
     public ServerFileTransferManager(MessageHandler handler, Map<UUID, CompletableFuture<Message>> pendingRequests) {
         super(handler, pendingRequests);
     }
+
+    /**
+     * Processes a client's request to initiate a file upload.
+     * It assigns a unique file ID and creates the necessary transfer state on the server.
+     *
+     * @param message The upload request message from the client.
+     * @throws IOException If an I/O error occurs.
+     */
     public void ProcessUploadRequest(Message message) throws IOException {
         var metadata = gson.fromJson(new String(message.getMetadata(), StandardCharsets.UTF_8), UploadRequestMetadata.class);
 
@@ -42,6 +62,14 @@ public class ServerFileTransferManager extends FileTransferManager {
         createTransfer(fileId,metadata.getFileName(),metadata.getFileExtension(),SAVE_PATH,totalChunksCount,metadata.getFileLength());
         handler.write(msg);
     }
+
+    /**
+     * Loads the {@link File} object corresponding to a completed file transfer.
+     *
+     * @param fileId The unique ID of the file.
+     * @return The File object pointing to the final saved file.
+     * @throws IOException If the transfer info file cannot be read.
+     */
     private File LoadFile(String fileId) throws IOException {
         String systemTempDir = System.getProperty("java.io.tmpdir");
         String basePath = Paths.get(systemTempDir, "JTelegram").toString();
@@ -51,10 +79,15 @@ public class ServerFileTransferManager extends FileTransferManager {
         try (FileReader reader = new FileReader(infoFile)) {
             info = gson.fromJson(reader, TransferInfo.class);
         }
-        File finalFile = new File(SAVE_PATH, info.getFileName() + "." + info.getFileExtension());
-        return finalFile;
+        return new File(SAVE_PATH, info.getFileName() + "." + info.getFileExtension());
     }
 
+    /**
+     * Processes a client's request for information about a file to be downloaded.
+     *
+     * @param message The download request message.
+     * @throws IOException If an I/O error occurs.
+     */
     public void ProcessDownloadRequest(Message message) throws IOException {
         var metadata = gson.fromJson(new String(message.getMetadata(), StandardCharsets.UTF_8), DownloadRequestMetadata.class);
         File file = LoadFile(metadata.getFileId());
@@ -68,6 +101,13 @@ public class ServerFileTransferManager extends FileTransferManager {
         );
         handler.write(msg);
     }
+
+    /**
+     * Processes a client's request for a specific chunk of a file.
+     *
+     * @param message The message containing the chunk request metadata.
+     * @throws IOException If an I/O error occurs while reading or sending the chunk.
+     */
     public void ProcessDownloadChunkRequest(Message message) throws IOException {
         var metadata = gson.fromJson(new String(message.getMetadata(), StandardCharsets.UTF_8), DownloadChunkRequestMetadata.class);
         File file = LoadFile(metadata.getFileId());
@@ -75,6 +115,14 @@ public class ServerFileTransferManager extends FileTransferManager {
             sendSpecificChunk(message.header.uuid, input, metadata.getFileId(), file.length(), 65536, metadata.getStartChunkIndex());
         }
     }
+
+    /**
+     * Processes a client's request to resume a paused upload.
+     *
+     * @param requestId The UUID of the request.
+     * @param metadata  The metadata for the resume request.
+     * @throws IOException If an I/O error occurs.
+     */
     public void ProcessUploadResumeRequest(UUID requestId, UploadResumeRequestMetadata metadata) throws IOException {
         String fileId = metadata.FileId;
         var transferFiles = LoadTransfer(fileId);
@@ -91,6 +139,4 @@ public class ServerFileTransferManager extends FileTransferManager {
         );
         handler.write(resultMessage);
     }
-
-
 }

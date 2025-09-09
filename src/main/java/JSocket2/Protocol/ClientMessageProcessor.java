@@ -19,6 +19,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Processes messages received by the client from the server.
+ * This class is responsible for handling different types of messages such as
+ * cryptographic key exchanges, file transfer chunks, and events.
+ */
 public class ClientMessageProcessor implements IMessageProcessor {
     private final Gson gson;
     private final MessageHandler messageHandler;
@@ -29,6 +34,18 @@ public class ClientMessageProcessor implements IMessageProcessor {
     private final Runnable onHandShakeComplete;
     private final ServiceProvider serviceProvider;
     private final EventBroker eventBroker;
+
+    /**
+     * Constructs a new ClientMessageProcessor.
+     *
+     * @param handler             The handler for reading and writing messages.
+     * @param clientSession       The session object for the client.
+     * @param pendingRequests     A map of pending requests awaiting a response.
+     * @param fileTransferManager The manager for handling file transfers.
+     * @param onHandShakeComplete A callback to run when the cryptographic handshake is complete.
+     * @param serviceProvider     The dependency injection service provider.
+     * @param eventBroker         The broker for publishing and subscribing to events.
+     */
     public ClientMessageProcessor(MessageHandler handler, ClientSession clientSession, Map<UUID, CompletableFuture<Message>> pendingRequests, ClientFileTransferManager fileTransferManager, Runnable onHandShakeComplete, ServiceProvider serviceProvider, EventBroker eventBroker){
         this.onHandShakeComplete = onHandShakeComplete;
         this.serviceProvider = serviceProvider;
@@ -40,6 +57,13 @@ public class ClientMessageProcessor implements IMessageProcessor {
         this.fileTransferManager = fileTransferManager;
     }
 
+    /**
+     * Processes an incoming message by delegating it to the appropriate handler based on its type.
+     *
+     * @param message The message to process.
+     * @throws IOException If an I/O error occurs.
+     * @throws UnsupportedOperationException If the message type is unknown.
+     */
     public void Invoke(Message message) throws IOException {
         switch (message.header.type) {
             case RSA_PUBLIC_KEY -> handleRsaPublicKey(message);
@@ -49,6 +73,11 @@ public class ClientMessageProcessor implements IMessageProcessor {
         }
     }
 
+    /**
+     * Handles an incoming event message.
+     *
+     * @param message The event message.
+     */
     private void handleEvent(Message message) {
         var metadatajson = new String(message.getMetadata(), StandardCharsets.UTF_8);
         System.out.println(metadatajson);
@@ -57,21 +86,37 @@ public class ClientMessageProcessor implements IMessageProcessor {
         eventBroker.publish(metadata, payloadJson);
     }
 
+    /**
+     * Handles a file chunk received from the server during a download.
+     *
+     * @param message The message containing the file chunk.
+     * @throws IOException If an I/O error occurs during file processing.
+     */
     private void handleDownloadChunk(Message message) throws IOException {
         fileTransferManager.ProcessSendChunk(message);
     }
+
+    /**
+     * Handles the server's RSA public key to initiate the secure session.
+     *
+     * @param message The message containing the RSA public key.
+     * @throws IOException If an I/O error occurs.
+     */
     private void handleRsaPublicKey(Message message) throws IOException{
         try {
             var publicKey = EncryptionUtil.decodeRsaPublicKey(message.getPayload());
             clientSession.setServerPublicKey(publicKey);
             sendAesKey();
-            //sendAuthModel();
-            //Login
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
             throw new RuntimeException(e);
         }
     }
 
+    /**
+     * Encrypts the client's AES key with the server's public RSA key and sends it to the server.
+     *
+     * @throws IOException If an I/O error occurs while sending the key.
+     */
     private void sendAesKey() throws IOException {
         UUID requestId = UUID.randomUUID();
         byte[] aes_key = clientSession.getAESKey().getEncoded();
@@ -83,8 +128,5 @@ public class ClientMessageProcessor implements IMessageProcessor {
         if(onHandShakeComplete != null){
             onHandShakeComplete.run();
         }
-
     }
-
-
 }

@@ -7,6 +7,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 
+/**
+ * Runs in a background thread to continuously listen for incoming messages.
+ * It reads messages from the network, dispatches responses to waiting futures,
+ * and passes other messages to a message processor.
+ */
 public class MessageListener implements Runnable {
 
     private final MessageHandler messageHandler;
@@ -16,13 +21,21 @@ public class MessageListener implements Runnable {
     private final IConnectionEventListener connectionEventListener;
     private volatile boolean running = true;
 
+    /**
+     * Constructs a MessageListener.
+     *
+     * @param messageHandler          The handler for reading messages from the stream.
+     * @param pendingRequests         A map of pending requests awaiting a response.
+     * @param messageProcessor        The processor for handling unsolicited messages.
+     * @param session                 The current session.
+     * @param connectionEventListener A listener for connection events, like disconnection.
+     */
     public MessageListener(
             MessageHandler messageHandler,
             Map<UUID, CompletableFuture<Message>> pendingRequests,
             IMessageProcessor messageProcessor,
             Session session,
             IConnectionEventListener connectionEventListener
-
     ) {
         this.messageHandler = messageHandler;
         this.pendingRequests = pendingRequests;
@@ -31,6 +44,10 @@ public class MessageListener implements Runnable {
         this.connectionEventListener = connectionEventListener;
     }
 
+    /**
+     * The main loop for listening for messages. Reads messages and dispatches them
+     * until the listener is stopped or a connection error occurs.
+     */
     @Override
     public void run() {
         while (running) {
@@ -43,7 +60,6 @@ public class MessageListener implements Runnable {
                 } else {
                     messageProcessor.Invoke(message);
                 }
-
             } catch (IOException e) {
                 if (connectionEventListener != null) {
                     connectionEventListener.onConnectionLost();
@@ -57,6 +73,9 @@ public class MessageListener implements Runnable {
         }
     }
 
+    /**
+     * Stops the message listening loop.
+     */
     public void stop() {
         running = false;
     }

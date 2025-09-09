@@ -1,14 +1,17 @@
 package JSocket2.Protocol;
 
 import JSocket2.Core.Session;
-import JSocket2.Cryptography.EncryptionUtil;
 import JSocket2.Utils.MessageUtil;
 
-import javax.crypto.SecretKey;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 
+/**
+ * Handles the reading and writing of {@link Message} objects to and from network streams.
+ * This class is responsible for serialization/deserialization of messages,
+ * handling encryption/decryption, and ensuring message integrity.
+ */
 public class MessageHandler {
     private final InputStream in;
     private final OutputStream out;
@@ -16,11 +19,24 @@ public class MessageHandler {
     private static final int HEADER_SIZE = 35;
     private static final byte[] MAGIC_BYTES = new byte[] { 0x12, 0x34, 0x56, 0x78 };
 
+    /**
+     * Constructs a MessageHandler.
+     *
+     * @param in      The input stream to read from.
+     * @param out     The output stream to write to.
+     * @param session The session associated with the connection.
+     */
     public MessageHandler(InputStream in, OutputStream out,Session session) {
         this.in = in;
         this.out = out;
         this.session = session;
     }
+
+    /**
+     * Synchronizes the input stream to find the start of a new message, identified by MAGIC_BYTES.
+     *
+     * @throws IOException If an I/O error occurs or the stream ends before the magic bytes are found.
+     */
     private void syncToMagicBytes() throws IOException {
         byte[] buffer = new byte[MAGIC_BYTES.length];
         int index = 0;
@@ -37,6 +53,13 @@ public class MessageHandler {
         throw new EOFException("Stream closed before magic bytes were found.");
     }
 
+    /**
+     * Checks if a buffer segment matches the predefined MAGIC_BYTES.
+     *
+     * @param buffer     The buffer to check.
+     * @param startIndex The starting index in the buffer.
+     * @return True if it matches, false otherwise.
+     */
     private boolean matchesMagicBytes(byte[] buffer, int startIndex) {
         for (int i = 0; i < MAGIC_BYTES.length; i++) {
             int bufferIndex = (startIndex + i) % MAGIC_BYTES.length;
@@ -46,6 +69,14 @@ public class MessageHandler {
         }
         return true;
     }
+
+    /**
+     * Reads a complete message from the input stream.
+     * It handles synchronization, reads the header and body, and performs decryption if required.
+     *
+     * @return The deserialized {@link Message}.
+     * @throws IOException If an I/O error occurs.
+     */
     public Message read() throws IOException {
         syncToMagicBytes();
         MessageHeader header = readHeader();
@@ -61,8 +92,13 @@ public class MessageHandler {
         return message;
     }
 
+    /**
+     * Reads the body (metadata and payload) of a message from the input stream.
+     *
+     * @param message The message object to populate.
+     * @throws IOException If an I/O error occurs.
+     */
     public void readBody(Message message) throws IOException{
-
         if (message.header.metadata_length > 0) {
             byte[] metadata = readFully(message.header.metadata_length);
             message.setMetadata(metadata);
@@ -72,8 +108,14 @@ public class MessageHandler {
             message.setPayload(payload);
         }
     }
-    public void writeBody(Message message)throws IOException {
 
+    /**
+     * Writes the body (metadata and payload) of a message to the output stream.
+     *
+     * @param message The message object to write.
+     * @throws IOException If an I/O error occurs.
+     */
+    public void writeBody(Message message)throws IOException {
         if (message.header.metadata_length > 0) {
             out.write(message.getMetadata());
         }
@@ -81,6 +123,15 @@ public class MessageHandler {
             out.write(message.getPayload());
         }
     }
+
+    /**
+     * Writes a complete message to the output stream.
+     * This method is synchronized to ensure thread safety. It performs encryption if required
+     * and writes the magic bytes, header, and body.
+     *
+     * @param message The message to be written.
+     * @throws IOException If an I/O error occurs.
+     */
     public synchronized void write(Message message) throws IOException {
         if(message.header.is_encrypted && message.header.type != MessageType.AES_KEY){
             MessageUtil.EncryptMessage(message,session.getAESKey());
@@ -93,6 +144,13 @@ public class MessageHandler {
         writeBody(message);
         out.flush();
     }
+
+    /**
+     * Reads and deserializes the message header from the input stream.
+     *
+     * @return The deserialized {@link MessageHeader}.
+     * @throws IOException If an I/O error occurs.
+     */
     private MessageHeader readHeader() throws IOException {
         byte[] headerBytes = readFully(HEADER_SIZE);
         ByteBuffer buffer = ByteBuffer.wrap(headerBytes);
@@ -116,6 +174,13 @@ public class MessageHandler {
                 payload_length
         );
     }
+
+    /**
+     * Serializes and writes the message header to the output stream.
+     *
+     * @param header The {@link MessageHeader} to write.
+     * @throws IOException If an I/O error occurs.
+     */
     private void writeHeader(MessageHeader header) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(HEADER_SIZE);
         buffer.putLong(header.uuid.getMostSignificantBits());
@@ -128,6 +193,14 @@ public class MessageHandler {
         buffer.putInt(header.payload_length);
         out.write(buffer.array());
     }
+
+    /**
+     * Reads a specified number of bytes from the input stream.
+     *
+     * @param len The number of bytes to read.
+     * @return A byte array containing the data read.
+     * @throws IOException If the end of the stream is reached before all bytes are read.
+     */
     private byte[] readFully(int len) throws IOException {
         byte[] buffer = new byte[len];
         int read = 0;
@@ -140,5 +213,4 @@ public class MessageHandler {
         }
         return buffer;
     }
-
 }

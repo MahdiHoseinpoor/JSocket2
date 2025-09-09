@@ -1,4 +1,4 @@
-![JSocket2 Header Image]
+![JSocket2 Header Image](/images/header1.png)
 
 # JSocket2: A Robust & Extensible Java Client-Server Framework
 

@@ -22,6 +22,11 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+/**
+ * Manages the client-side connection to the server, including connection lifecycle,
+ * message handling, automatic reconnection, and interaction with various protocol managers.
+ * This is the primary entry point and operational core for a client instance.
+ */
 public class ClientApplication implements IConnectionEventListener {
     private final String host;
     private final int port;
@@ -44,7 +49,6 @@ public class ClientApplication implements IConnectionEventListener {
         return t;
     });
 
-    // Protocol and State fields
     private final Gson gson = new Gson();
     private Socket socket;
     private MessageHandler messageHandler;
@@ -58,6 +62,16 @@ public class ClientApplication implements IConnectionEventListener {
     private final ConcurrentMap<UUID, CompletableFuture<Message>> pendingRequests = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Future<?>> activeTasks = new ConcurrentHashMap<>();
 
+    /**
+     * Constructs a new ClientApplication.
+     *
+     * @param host          The server host address.
+     * @param port          The server port.
+     * @param ignored       An ignored IConnectionEventListener, as this class implements its own.
+     * @param subscribers   A collection of event subscribers for the client-side event hub.
+     * @param services      The dependency injection service collection.
+     * @param options       Configuration for reconnection behavior.
+     */
     public ClientApplication(String host, int port, IConnectionEventListener ignored, EventSubscriberCollection subscribers, ServiceCollection services, ReconnectionOptions options) {
         this.host = host;
         this.port = port;
@@ -72,6 +86,7 @@ public class ClientApplication implements IConnectionEventListener {
      * Starts the client asynchronously. It will attempt to connect and, if it fails
      * or gets disconnected, will automatically try to reconnect based on the configured
      * ReconnectionOptions.
+     * @throws IllegalStateException if the client has already been shut down.
      */
     public void startAsync() {
         if (shutdownRequested) {
@@ -87,12 +102,8 @@ public class ClientApplication implements IConnectionEventListener {
 
         while (!shutdownRequested) {
             if (tryConnectOnce()) {
-                // Successfully connected. The message listener thread will now handle
-                // disconnects by calling onConnectionLost(). This loop's job is done for now.
                 return;
             }
-
-            // Connection failed, wait before retrying
             try {
                 Thread.sleep(currentRetryDelay);
                 tryCount++;
@@ -103,7 +114,7 @@ public class ClientApplication implements IConnectionEventListener {
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                break; // Exit if interrupted
+                break;
             }
         }
     }
@@ -117,7 +128,6 @@ public class ClientApplication implements IConnectionEventListener {
 
             messageHandler = new MessageHandler(in, out, clientSession);
             messageProcessor = new ClientMessageProcessor(messageHandler, clientSession, pendingRequests, getFileTransferManager(), this::onConnected, serviceProvider, eventBroker);
-            // Pass 'this' as the IConnectionEventListener
             messageListener = new MessageListener(messageHandler, pendingRequests, messageProcessor, clientSession, this);
 
             listenerThread = new Thread(messageListener, "JSocket-MessageListener");
@@ -161,18 +171,20 @@ public class ClientApplication implements IConnectionEventListener {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * Handles connection loss by cleaning up resources and initiating the reconnection process.
+     */
     @Override
     public void onConnectionLost() {
         cleanupCurrentConnection();
         if (!shutdownRequested) {
             System.out.println("Connection lost. Attempting to reconnect...");
             reconnectListeners.forEach(listener -> listener.accept(this));
-            // Resubmit the connection loop to start the reconnection process
             startAsync();
         }
     }
 
-    // --- Event Listeners and Callbacks ---
     private void onConnected() {
         connected.set(true);
         connectedListeners.forEach(listener -> listener.accept(this));
@@ -184,47 +196,91 @@ public class ClientApplication implements IConnectionEventListener {
         connectionStatusListeners.forEach(listener -> listener.accept(false));
     }
 
+    /**
+     * Adds a listener that is notified of connection status changes.
+     * @param listener The consumer to be called with {@code true} for connected and {@code false} for disconnected.
+     */
     public void addConnectionStatusListener(Consumer<Boolean> listener) {
         connectionStatusListeners.add(listener);
     }
 
+    /**
+     * Removes a previously added connection status listener.
+     * @param listener The listener to remove.
+     */
     public void removeConnectionStatusListener(Consumer<Boolean> listener) {
         connectionStatusListeners.remove(listener);
     }
 
+    /**
+     * Adds a listener that is notified upon a successful connection.
+     * @param listener The consumer to be called when the client connects.
+     */
     public void addConnectedListener(Consumer<ClientApplication> listener) {
         connectedListeners.add(listener);
     }
 
+    /**
+     * Adds a listener that is notified when the client starts a reconnection attempt.
+     * @param listener The consumer to be called when reconnection begins.
+     */
     public void addReconnectListener(Consumer<ClientApplication> listener) {
         reconnectListeners.add(listener);
     }
 
-    // --- Getters and Business Logic Methods ---
+    /**
+     * Checks if the client is currently connected to the server.
+     * @return {@code true} if connected, otherwise {@code false}.
+     */
     public boolean isConnected() {
         return connected.get();
     }
 
+    /**
+     * Gets the executor service for background tasks.
+     * @return The cached thread pool executor.
+     */
     public ExecutorService getBackgroundExecutor() {
         return backgroundExecutor;
     }
 
+    /**
+     * Registers a long-running task to be managed by the client.
+     * @param Id   The unique identifier for the task.
+     * @param task The Future representing the task.
+     */
     public void registerTask(String Id, Future<?> task) {
         activeTasks.put(Id, task);
     }
 
+    /**
+     * Unregisters a task, typically upon its completion or cancellation.
+     * @param Id The unique identifier of the task to unregister.
+     */
     public void unregisterTask(String Id) {
         activeTasks.remove(Id);
     }
 
+    /**
+     * Gets the current message handler for this client.
+     * @return The active MessageHandler instance.
+     */
     public MessageHandler getMessageHandler() {
         return messageHandler;
     }
 
+    /**
+     * Gets the map of pending requests awaiting a response from the server.
+     * @return A concurrent map of request UUIDs to their CompletableFuture responses.
+     */
     public ConcurrentMap<UUID, CompletableFuture<Message>> getPendingRequests() {
         return pendingRequests;
     }
 
+    /**
+     * Gets the file transfer manager for this client.
+     * @return The singleton ClientFileTransferManager instance.
+     */
     public ClientFileTransferManager getFileTransferManager() {
         if (fileTransferManager == null && messageHandler != null) {
             fileTransferManager = new ClientFileTransferManager(messageHandler, pendingRequests);
@@ -232,10 +288,21 @@ public class ClientApplication implements IConnectionEventListener {
         return fileTransferManager;
     }
 
+    /**
+     * Gets the service provider for dependency injection.
+     * @return The configured ServiceProvider.
+     */
     public ServiceProvider getServiceProvider() {
         return serviceProvider;
     }
 
+    /**
+     * Sends an authentication request to the server.
+     * @param authModel The authentication model containing credentials.
+     * @return The StatusCode indicating the result of the authentication attempt.
+     * @throws IOException          if the client is not connected or a communication error occurs.
+     * @throws InterruptedException if the waiting thread is interrupted.
+     */
     public StatusCode sendAuthModel(AuthModel authModel) throws IOException, InterruptedException {
         if (!isConnected()) {
             throw new IOException("Client is not connected.");
@@ -251,7 +318,7 @@ public class ClientApplication implements IConnectionEventListener {
         messageHandler.write(message);
 
         try {
-            var response = future.get(10, TimeUnit.SECONDS); // Add a timeout
+            var response = future.get(10, TimeUnit.SECONDS);
             var metadata = gson.fromJson(new String(response.getMetadata(),StandardCharsets.UTF_8), RpcResponseMetadata.class);
             return StatusCode.fromCode(metadata.getStatusCode());
         } catch (ExecutionException | TimeoutException e) {

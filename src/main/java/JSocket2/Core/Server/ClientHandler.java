@@ -13,6 +13,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Manages the server-side logic for a single connected client.
+ * Each instance runs in its own thread, handling message processing,
+ * session management, and communication for one client.
+ */
 public class ClientHandler implements Runnable {
     private Socket socket;
     private DataInputStream in;
@@ -29,6 +34,16 @@ public class ClientHandler implements Runnable {
     private final ServerSession serverSession;
     private boolean isActive = true;
 
+    /**
+     * Constructs a new ClientHandler for a given client socket.
+     *
+     * @param serviceProvider      The dependency injection service provider.
+     * @param socket               The client's socket connection.
+     * @param rpcDispatcher        The dispatcher for handling RPC calls.
+     * @param serverSessionManager The manager for all server sessions.
+     * @param pendingRequests      A map of requests awaiting responses.
+     * @throws IOException if an I/O error occurs when creating streams.
+     */
     public ClientHandler(ServiceProvider serviceProvider,Socket socket,
                          RpcDispatcher rpcDispatcher,
                          ServerSessionManager serverSessionManager,
@@ -58,6 +73,11 @@ public class ClientHandler implements Runnable {
         message.setPayload(publicKey);
         messageHandler.write(message);
     }
+
+    /**
+     * The main execution loop for the client handler. Listens for incoming messages,
+     * dispatches them to the message processor, and handles disconnection.
+     */
     public void run() {
         while (isActive) {
             try {
@@ -87,8 +107,13 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * Sends a message to the connected client.
+     *
+     * @param message The {@link Message} to send.
+     * @throws IOException if a communication error occurs.
+     */
     public void send(Message message) throws IOException {
         messageHandler.write(message);
     }
 }
-

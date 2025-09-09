@@ -1,20 +1,22 @@
-// CREATE NEW FILE: main/java/JSocket2/Protocol/IClientLifecycleListener.java
 package JSocket2.Core.Server;
 
 /**
- * An interface for the application layer to listen to client lifecycle events
- * from the core server, such as connection, authentication, and disconnection.
+ * Defines a contract for components that need to be notified of client
+ * lifecycle events, such as authentication and disconnection. This allows the
+ * application layer to react to changes in client state.
  */
 public interface IClientLifecycleListener {
     /**
-     * Called when a client's session is successfully authenticated.
-     * @param session The session of the newly authenticated user.
+     * Invoked when a client's session has been successfully authenticated.
+     *
+     * @param session The {@link ServerSession} of the authenticated client.
      */
     void onClientAuthenticated(ServerSession session);
 
     /**
-     * Called when a client's connection is lost or terminated.
-     * @param session The session of the client that disconnected.
+     * Invoked when a client disconnects or the connection is lost.
+     *
+     * @param session The {@link ServerSession} of the client that has disconnected.
      */
     void onClientDisconnected(ServerSession session);
 }

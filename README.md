@@ -479,3 +479,6 @@ The project is organized into logical packages:
 ## License
 
 This project is open-source and available under the [MIT License](LICENSE.md). Feel free to use, modify, and distribute it for your own projects.
+
+## More Information
+[JSocket2: How a C# Developer Rebuilt the Best Parts of ASP.NET in Java](https://medium.com/@mahdihoseinpoor/jsocket2-how-a-c-developer-rebuilt-the-best-parts-of-asp-net-in-java-04701ca0ea39)

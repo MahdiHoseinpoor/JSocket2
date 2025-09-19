@@ -6,6 +6,11 @@
 
 This framework is not just a communication layer; it's a testament to architectural elegance, emphasizing modularity, extensibility, and testability. It offers a rich set of features, from secure, encrypted channels to dynamic Remote Procedure Calls (RPC) and an event-driven messaging system, all underpinned by a custom, lightweight Dependency Injection (DI) container. JSocket2 stands as a prime example of building complex systems with clarity and maintainability at their core.
 
+### 🌟 Showcase: Telegram Clone Desktop
+JSocket2 is battle-tested. It serves as the complete networking and architectural backbone for a feature-rich Telegram Clone Desktop application. This project demonstrates how JSocket2 can be used to build a complex, real-world application with professional features like real-time messaging, file transfers, and secure authentication.
+
+See JSocket2 in action in the [Telegram Clone Desktop repository](https://github.com/11-devs/Telegram-clone).
+
 ## Table of Contents
 
 1.  [Features](#features)
